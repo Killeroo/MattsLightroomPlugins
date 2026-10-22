@@ -40,7 +40,36 @@ function TestTask.processRenderedPhotos( functionContext, exportContext )
     myLogger:trace("I've entered a new world of dialogs")
     
     local exportSession = exportContext.exportSession
+    
+    -- Build an array of all selected catalogs
+    local catalog = import 'LrApplication'.activeCatalog()
+    local activeSources = catalog:getActiveSources()
+    local sourceCollections = {}
+    for _, source in ipairs(activeSources) do 
+        local sourceType = source:type()
+        if sourceType == "LrCollection" or sourceType == "LrSmartCollection" then
+            table.insert(sourceCollections, source)
+        end
+    end
 
+    -- Build a lookup table of each photo in the selected collection
+    local photoToCollectionMap = {}
+    for _, collection in ipairs(sourceCollections) do 
+        local collectionName = collection:getName()
+        local photosInCollection = collection:getPhotos()
+
+        for _, photo in ipairs(photosInCollection) do
+            local photoId = photo.localIdentifier
+            
+            if not photoToCollectionMap[photoId] then 
+                photoToCollectionMap[photoId] = {}
+            end
+
+            table.insert(photoToCollectionMap[photoId], collectionName)
+        end
+    end
+
+    -- Export progress bar
 	local nPhotos = exportSession:countRenditions()
     local titleNew = nPhotos .. " photos exporting..."
 	local progressScope = exportContext:configureProgress {
@@ -58,10 +87,11 @@ function TestTask.processRenderedPhotos( functionContext, exportContext )
 
         if success then
             local photo = rendition.photo
-            local catalogePath = photo:getRawMetadata('path')
-            local directories = mysplit(catalogePath, '\\')
+            local photoId = photo.localIdentifier
 
             -- Create new folder name based off location in catalogue
+            local catalogePath = photo:getRawMetadata('path')
+            local directories = mysplit(catalogePath, '\\')
             local dirCount = tablelength(directories)
             local folderName = ""
             for key,value in pairs(directories) do 
@@ -77,6 +107,17 @@ function TestTask.processRenderedPhotos( functionContext, exportContext )
                         folderName = folderName .. "-" .. directories[key]
                     end
                 end
+            end
+
+            -- Create new folder based off collection name
+            local owningCollections = photoToCollectionMap[photoId]
+            if owningCollections and #owningCollections > 0 then
+                myLogger:trace(owningCollections[1])
+                -- local collectionName = owningCollections[1]
+                -- if not LrFileUtils.exists(collectionName) then
+                --     LrFileUtils.createDirectory(collectionName)
+                -- end
+                folderName = owningCollections[1]
             end
 
             -- Check a folder of that name doesn't already exist
@@ -95,12 +136,12 @@ function TestTask.processRenderedPhotos( functionContext, exportContext )
             LrFileUtils.delete(pathOrMessage)
 
 
-            myLogger:trace(folderName)
-            myLogger:trace(parentDir)
-            myLogger:trace(destDir)
-            myLogger:trace(destFilepath)
-            myLogger:trace(pathOrMessage)
-            myLogger:trace(filename)
+            -- myLogger:trace(folderName)
+            -- myLogger:trace(parentDir)
+            -- myLogger:trace(destDir)
+            -- myLogger:trace(destFilepath)
+            -- myLogger:trace(pathOrMessage)
+            -- myLogger:trace(filename)
         end
     end
 end
